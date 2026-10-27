@@ -55,6 +55,7 @@ import de.komoonlight.geo.Gpx
 import de.komoonlight.geo.Pt
 import de.komoonlight.komoot.KomootClient
 import de.komoonlight.location.GpsEvent
+import de.komoonlight.location.gpsLoggerLocations
 import de.komoonlight.location.lightOsLocations
 import de.komoonlight.nav.NavEvent
 import de.komoonlight.nav.NavStatus
@@ -71,6 +72,8 @@ import de.komoonlight.ui.RouteView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -172,10 +175,27 @@ class NavViewModel(
         if (mode.value == Mode.FREE_RIDE && track.value.isEmpty()) { resetRecording(); recording.value = true }
         gpsJob = viewModelScope.launch {
             try {
-                lightOsLocations().collect { e ->
+                // Zwei Quellen: LightOS selbst und – solange LightOS Spur blockiert – die App „GPS Logger“.
+                // LightOS hat Vorrang; Warte-Hinweise nur, solange von keiner Quelle Punkte kommen.
+                var lastLightOsFix = 0L
+                var lastAnyFix = 0L
+                merge(
+                    lightOsLocations().map { true to it },
+                    gpsLoggerLocations().map { false to it },
+                ).collect { (fromLightOs, e) ->
+                    val now = System.currentTimeMillis()
                     when (e) {
-                        is GpsEvent.Fix -> onPosition(e.pt, e.accuracyM)
-                        is GpsEvent.Waiting -> gpsInfo.value = e.reason
+                        is GpsEvent.Fix -> {
+                            if (fromLightOs) lastLightOsFix = now
+                            else if (now - lastLightOsFix < 10_000) return@collect
+                            lastAnyFix = now
+                            onPosition(e.pt, e.accuracyM)
+                        }
+                        is GpsEvent.Waiting -> if (now - lastAnyFix > 10_000) {
+                            gpsInfo.value = if (fromLightOs && "untrusted" in e.reason)
+                                "LightOS blockiert GPS – GPS Logger starten (siehe Anleitung)"
+                            else e.reason
+                        }
                     }
                 }
             } finally {

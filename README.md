@@ -12,7 +12,7 @@ Das Repo enthält das komplette [Light SDK](https://github.com/lightphone/light-
 > Nutzt dieselben **inoffiziellen** Komoot-Endpunkte wie [KomootGPX](https://pypi.org/project/komootgpx/).
 > Nur für den privaten Gebrauch mit dem eigenen Account. Komoot kann die Endpunkte jederzeit ändern.
 
-## Funktionen (v0.10)
+## Funktionen (v0.11)
 
 - **Rad oder Wandern**: ohne geplante Tour sofort aufzeichnen – Kilometer, Zeit, Ø-Tempo
   (geht auch ohne Komoot-Anmeldung). Bei geplanten Touren gilt die in Komoot geplante Sportart.
@@ -37,6 +37,27 @@ Das Repo enthält das komplette [Light SDK](https://github.com/lightphone/light-
   hochgeladen („Radtour 21.10.2026, 17:45“, Sportart Fahrrad). Ohne Netz oder Anmeldung wartet sie
   und wird beim nächsten Öffnen des Startscreens nachgeholt – antippen versucht es sofort erneut.
 - Zusätzlich als GPX im **LightOS Tool Manager** (Browser) unter „Aufzeichnungen“
+- **GPS über „GPS Logger for Android“**, solange LightOS Spur den Standort verweigert (siehe unten)
+
+## GPS über GPS Logger (Übergangslösung)
+
+LightOS gibt den Standort bisher nur an von Light freigegebene Tools („NoPermission: untrusted caller“).
+Bis das geht, kann Spur die Punkte von [GPS Logger for Android](https://gpslogger.app/) übernehmen –
+die App misst selbst und schickt jeden Punkt an Spur, nur innerhalb des Phones (127.0.0.1).
+
+Einmal in GPS Logger einrichten:
+
+1. **Einstellungen → Logging-Details → Log to custom URL** einschalten, URL:
+   `http://127.0.0.1:8378/fix?lat=%LAT&lon=%LON&acc=%ACC&alt=%ALT&ts=%TIMESTAMP`
+   (Methode GET, kein Body).
+2. **Leistung → Logging-Intervall** auf 1–2 s, Distanzfilter 0 (für Navigation; für Wanderungen reichen 5 s).
+3. Andere Ziele (GPX, KML, …) nach Belieben – Spur zeichnet selbst auf und lädt zu Komoot hoch.
+
+Unterwegs: erst in GPS Logger **Start**, dann Spur öffnen. Danach in GPS Logger wieder stoppen.
+Kommen Punkte, verschwindet „Warte auf GPS…“. Liefert LightOS später selbst GPS, hat das Vorrang.
+
+Grenze: GPS Logger hält Punkte ohne Datenverbindung (Funkloch) teils zurück und schickt sie später;
+Spur verwirft Punkte, die älter als 30 s ankommen, damit die Navigation nicht springt.
 
 ## Code
 
@@ -52,6 +73,7 @@ tool/
     ├── Store.kt                    Token-Speicher (DataStore)
     ├── komoot/KomootClient.kt      Login, Touren, Route + Abbiegehinweise
     ├── location/LightLocation.kt   GPS über LightOS
+    ├── location/GpsLoggerBridge.kt GPS von „GPS Logger“ über 127.0.0.1 (getestet)
     ├── nav/Navigator.kt            Navigationslogik (ohne Android, getestet)
     ├── nav/Turn.kt                 Komoot-Abbiegetypen → Text + Pfeil
     ├── nav/AutoPause.kt            Stillstand erkennen (getestet)
